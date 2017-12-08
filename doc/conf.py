@@ -8,6 +8,7 @@
 extensions = [
     'nbsphinx',
     'sphinx.ext.mathjax',
+    'jupyter_alabaster_theme',
 ]
 
 # Exclude build directory and Jupyter backup files:
@@ -106,6 +107,7 @@ except Exception:
 # -- Options for HTML output ----------------------------------------------
 
 html_title = project + ' version ' + release
+html_theme = 'jupyter_alabaster_theme'
 
 # -- Options for LaTeX output ---------------------------------------------
 
