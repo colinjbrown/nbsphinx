@@ -119,8 +119,8 @@ RST_TEMPLATE = """
 {%- if datatype == 'text/plain' %}{# nothing #}
 {%- else %} rst
 {%- endif %}
-{%- if output.output_type == 'execute_result' and cell.execution_count %}
-    :execution-count: {{ cell.execution_count }}
+{%- if output.output_type == 'execute_result' and output.execution_count %}
+    :execution-count: {{ output.execution_count }}
 {%- endif %}
 {%- if output != cell.outputs[-1] %}
     :more-to-come:
@@ -723,7 +723,7 @@ class NbInput(rst.Directive):
     optional_arguments = 1  # lexer name
     final_argument_whitespace = False
     option_spec = {
-        'execution-count': rst.directives.positive_int,
+        'execution-count': rst.directives.unchanged,
         'empty-lines-before': rst.directives.nonnegative_int,
         'empty-lines-after': rst.directives.nonnegative_int,
         'no-output': rst.directives.flag,
@@ -762,7 +762,7 @@ class NbOutput(rst.Directive):
     optional_arguments = 1  # 'rst' or nothing (which means literal text)
     final_argument_whitespace = False
     option_spec = {
-        'execution-count': rst.directives.positive_int,
+        'execution-count': rst.directives.unchanged,
         'more-to-come': rst.directives.flag,
         'empty-lines-before': rst.directives.nonnegative_int,
         'empty-lines-after': rst.directives.nonnegative_int,
@@ -778,10 +778,9 @@ class NbOutput(rst.Directive):
         if 'more-to-come' not in self.options:
             classes.append('nblast')
         container = docutils.nodes.container(classes=classes)
-
         # Optional output prompt
         if execution_count:
-            text = 'Out[{}]:'.format(execution_count)
+            text = '{}:'.format(execution_count)
             container += CodeNode.create(text, classes=['prompt'])
             latex_prompt = text + ' '
         else:
