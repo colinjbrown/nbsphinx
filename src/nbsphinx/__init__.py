@@ -79,6 +79,8 @@ THUMBNAIL_MIME_TYPES = {
     'image/jpeg': '.jpg',
 }
 
+
+
 # The default rst template name is changing in nbconvert 6, so we substitute
 # it in to the *extends* directive.
 RST_TEMPLATE = """
@@ -114,7 +116,7 @@ RST_TEMPLATE = """
 {%- endif -%}
 {{ insert_empty_lines(cell.source) }}
 {%- if cell.execution_count %}
-    :execution-count: {{ cell.execution_count }}
+    :execution-count: {{ '%0x' | format(cell.execution_count | int ) }}
 {%- endif %}
 {%- if not cell.outputs %}
     :no-output:
@@ -127,8 +129,13 @@ RST_TEMPLATE = """
 {% macro insert_nboutput(datatype, output, cell) -%}
 .. nboutput::
 {%- if output.output_type == 'execute_result' and cell.execution_count %}
-    :execution-count: {{ cell.execution_count }}
+{%- if output.metadata.output_tag %}
+    :execution-count: {{ output.metadata.output_tag }}
+{%- else %}
+    :execution-count: {{ '%0x' | format(cell.execution_count | int ) }}
 {%- endif %}
+{%- endif %}
+
 {%- if output != cell.outputs[-1] %}
     :more-to-come:
 {%- endif %}
@@ -721,7 +728,15 @@ def _create_code_nodes(directive):
 
     outer_node = docutils.nodes.container(classes=outer_classes)
     if execution_count:
-        prompt = prompt_template % (execution_count,)
+        if '[' in execution_count:
+            prompt = f'{execution_count}:'
+        else:
+            try:
+                hextest = int(execution_count,16)
+                assert len(str(hextest)) > 8 
+                prompt = prompt_template % (execution_count,)
+            except (ValueError,AssertionError):
+                prompt = f'{execution_count}:'
         prompt_node = docutils.nodes.literal_block(
             prompt, prompt, language='none', classes=['prompt'])
     else:
@@ -782,7 +797,7 @@ class NbInput(rst.Directive):
     optional_arguments = 1  # lexer name
     final_argument_whitespace = False
     option_spec = {
-        'execution-count': rst.directives.positive_int,
+        'execution-count': rst.directives.unchanged,
         'empty-lines-before': rst.directives.nonnegative_int,
         'empty-lines-after': rst.directives.nonnegative_int,
         'no-output': rst.directives.flag,
@@ -800,7 +815,7 @@ class NbOutput(rst.Directive):
     required_arguments = 0
     final_argument_whitespace = False
     option_spec = {
-        'execution-count': rst.directives.positive_int,
+        'execution-count': rst.directives.unchanged,
         'more-to-come': rst.directives.flag,
         'fancy': rst.directives.flag,
         'class': rst.directives.unchanged,
