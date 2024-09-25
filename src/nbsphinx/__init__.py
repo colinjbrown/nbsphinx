@@ -648,7 +648,7 @@ class NotebookParser(rst.Parser):
             raise NotebookError('\n'.join(lines))
         except Exception as e:
             raise NotebookError(type(e).__name__ + ' in ' +
-                                env.doc2path(env.docname, base=None) + ':\n' +
+                                str(env.doc2path(env.docname, base=None)) + ':\n' +
                                 str(e))
 
         rststring = """
