@@ -18,6 +18,7 @@ from urllib.parse import unquote
 import uuid
 
 import docutils
+from docutils import nodes
 from docutils.parsers import rst
 import jinja2
 import nbconvert
@@ -132,7 +133,7 @@ RST_TEMPLATE = """
 {%- if output.metadata.output_tag %}
     :execution-count: {{ output.metadata.output_tag }}
 {%- else %}
-    :execution-count: {{ '%0x' | format(cell.execution_count | int ) }}
+    :execution-count: {{ '[%0x]' | format(cell.execution_count | int ) }}
 {%- endif %}
 {%- endif %}
 
@@ -703,6 +704,10 @@ class FancyOutputNode(docutils.nodes.Element):
     """A custom node for non-plain-text output of code cells."""
 
 
+class OutputPromptNode(docutils.nodes.literal_block):
+    """A custom node for the output prompt of a code cell."""
+
+
 def _create_code_nodes(directive):
     """Create nodes for an input or output code cell."""
     directive.state.document['nbsphinx_code_css'] = True
@@ -728,17 +733,12 @@ def _create_code_nodes(directive):
 
     outer_node = docutils.nodes.container(classes=outer_classes)
     if execution_count:
-        if '[' in execution_count:
-            prompt = f'{execution_count}:'
-        else:
-            try:
-                hextest = int(execution_count,16)
-                assert len(str(hextest)) > 8 
-                prompt = prompt_template % (execution_count,)
-            except (ValueError,AssertionError):
-                prompt = f'{execution_count}:'
-        prompt_node = docutils.nodes.literal_block(
-            prompt, prompt, language='none', classes=['prompt'])
+        orig_execution_count = execution_count
+        if len(execution_count) > 13:
+            execution_count = f'{execution_count[:8]}...{execution_count[-2:]}'
+        prompt = prompt_template % (execution_count,)
+        prompt_node = OutputPromptNode(
+            prompt, prompt, language='none', classes=['prompt'], title=orig_execution_count)
     else:
         prompt = ''
         prompt_node = docutils.nodes.container(classes=['prompt', 'empty'])
@@ -2011,6 +2011,35 @@ def depart_gallery_html(self, node):
         ))
     self.body.append('</div>\n')
 
+# copied from nbsphinx with addition of title attribute
+def visit_outputprompt_html(self, node):
+    if node.rawsource != node.astext():
+        # most probably a parsed-literal block -- don't highlight
+        return super().visit_literal_block(node)
+
+    lang = node.get('language', 'default')
+    linenos = node.get('linenos', False)
+    highlight_args = node.get('highlight_args', {})
+    highlight_args['force'] = node.get('force', False)
+    opts = self.config.highlight_options.get(lang, {})
+
+    if linenos and self.config.html_codeblock_linenos_style:
+        linenos = self.config.html_codeblock_linenos_style
+
+    highlighted = self.highlighter.highlight_block(
+        node.rawsource,
+        lang,
+        opts=opts,
+        linenos=linenos,
+        location=node,
+        **highlight_args,
+    )
+    starttag = self.starttag(
+        node, 'div', suffix='', CLASS='highlight-%s notranslate' % lang, title=node.get('title','')
+    )
+    self.body.append(starttag + highlighted + '</div>\n')
+    raise nodes.SkipNode
+
 
 def do_nothing(self, node):
     pass
@@ -2031,7 +2060,7 @@ def setup(app):
     app.add_config_value('nbsphinx_prolog', None, rebuild='env')
     app.add_config_value('nbsphinx_epilog', None, rebuild='env')
     app.add_config_value('nbsphinx_input_prompt', '[%s]:', rebuild='env')
-    app.add_config_value('nbsphinx_output_prompt', '[%s]:', rebuild='env')
+    app.add_config_value('nbsphinx_output_prompt', '%s:', rebuild='env')
     app.add_config_value('nbsphinx_custom_formats', {}, rebuild='env')
     # Default value is set in config_inited():
     app.add_config_value('nbsphinx_requirejs_path', None, rebuild='html')
@@ -2063,6 +2092,10 @@ def setup(app):
                  text=(visit_admonition_text, depart_admonition_text))
     app.add_node(GalleryNode,
                  html=(do_nothing, depart_gallery_html),
+                 latex=(do_nothing, do_nothing),
+                 text=(do_nothing, do_nothing))
+    app.add_node(OutputPromptNode,
+                 html=(visit_outputprompt_html, do_nothing),
                  latex=(do_nothing, do_nothing),
                  text=(do_nothing, do_nothing))
     app.connect('builder-inited', builder_inited)
